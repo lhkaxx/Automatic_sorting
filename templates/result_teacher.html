@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}教师视图 — 考场自动排座系统{% endblock %}
+{% block content %}
+<h1>👨‍🏫 监考分配表</h1>
+
+<div class="result-tabs">
+    <a href="{{ url_for('result_classroom') }}" class="tab">考场视图</a>
+    <a href="{{ url_for('result_student') }}" class="tab">考生视图</a>
+    <a href="{{ url_for('result_teacher') }}" class="tab active">教师视图</a>
+    <a href="{{ url_for('result_class') }}" class="tab">班级视图</a>
+</div>
+
+{% if not results %}
+<div class="alert alert-info">暂无排座结果。</div>
+{% elif not teacher_assignments %}
+<div class="alert alert-info">未上传教师数据或未启用监考分配。</div>
+{% else %}
+
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>教师</th>
+            <th>职工号</th>
+            <th>任教科目</th>
+            <th>职称</th>
+            {% for session_id in results.keys() %}
+            <th>{{ session_id }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for t in teachers %}
+        <tr>
+            <td><strong>{{ t.name }}</strong></td>
+            <td>{{ t.employee_id }}</td>
+            <td>{{ t.subject }}</td>
+            <td>{{ t.title }}</td>
+            {% for session_id in results.keys() %}
+            {% set ta = teacher_assignments.get(session_id, {}) %}
+            {% set assignment = ta.get(t.employee_id) %}
+            <td>
+                {% if assignment %}
+                {{ assignment.room_id }}
+                {% if assignment.is_violation %}
+                <span class="tag tag-danger" title="任教班级冲突">⚠</span>
+                {% endif %}
+                {% else %}
+                —
+                {% endif %}
+            </td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endif %}
+{% endblock %}

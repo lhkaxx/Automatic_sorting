@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}评估报告 — 考场自动排座系统{% endblock %}
+{% block content %}
+<h1>📈 评估报告</h1>
+
+{% if not report %}
+<div class="alert alert-info">
+    暂无评估报告。请先在<a href="{{ url_for('result_classroom') }}">结果页面</a>点击"生成评估报告"。
+</div>
+<div class="form-actions">
+    <a href="{{ url_for('report') }}?generate=1" class="btn btn-primary">📊 生成评估报告</a>
+</div>
+{% else %}
+
+<!-- 总览 -->
+<div class="report-overview">
+    <div class="report-card">
+        <h3>约束满足率</h3>
+        <div class="big-number {{ 'green' if report.constraint_pass_rate >= 0.95 else 'orange' }}">
+            {{ "%.0f" | format(report.constraint_pass_rate * 100) }}%
+        </div>
+    </div>
+    <div class="report-card">
+        <h3>班级隔离度</h3>
+        <div class="big-number {{ 'green' if report.class_isolation_score >= 0.9 else 'orange' }}">
+            {{ "%.0f" | format(report.class_isolation_score * 100) }}%
+        </div>
+    </div>
+    <div class="report-card">
+        <h3>运算耗时</h3>
+        <div class="big-number">{{ "%.2f" | format(report.time_elapsed) }}s</div>
+    </div>
+    <div class="report-card">
+        <h3>违规数</h3>
+        <div class="big-number {{ 'green' if report.total_violations == 0 else 'red' }}">
+            {{ report.total_violations }}
+        </div>
+    </div>
+</div>
+
+<!-- 收敛曲线 -->
+{% if report.energy_curve and report.energy_curve | length > 0 %}
+<div class="chart-container">
+    <h3>📉 收敛曲线</h3>
+    <canvas id="convergence-chart" width="800" height="400"></canvas>
+</div>
+{% endif %}
+
+<!-- 考场利用率 -->
+<div class="chart-container">
+    <h3>📊 考场利用率</h3>
+    <canvas id="utilization-chart" width="800" height="400"></canvas>
+</div>
+
+<!-- 违规详情 -->
+{% if report.violation_details %}
+<div class="violations-section">
+    <h3>⚠️ 违规详情 ({{ report.total_violations }} 条)</h3>
+    <ul class="violation-list">
+        {% for v in report.violation_details %}
+        <li class="{{ 'violation-hard' if '建议' not in v else 'violation-soft' }}">{{ v }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if report %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 收敛曲线
+    {% if report.energy_curve and report.energy_curve | length > 0 %}
+    const energyData = {{ report.energy_curve | tojson }};
+    const ctx1 = document.getElementById('convergence-chart');
+    if (ctx1) {
+        new Chart(ctx1, {
+            type: 'line',
+            data: {
+                labels: energyData.map((_, i) => i + 1),
+                datasets: [{
+                    label: 'Energy',
+                    data: energyData,
+                    borderColor: '#2c7be5',
+                    backgroundColor: 'rgba(44, 123, 229, 0.1)',
+                    fill: true,
+                    pointRadius: 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: { title: { display: true, text: '迭代次数' } },
+                    y: { title: { display: true, text: 'Energy' }, type: 'logarithmic' }
+                }
+            }
+        });
+    }
+    {% endif %}
+
+    // 利用率柱状图
+    const utilData = {{ report.room_utilization | tojson }};
+    const ctx2 = document.getElementById('utilization-chart');
+    if (ctx2) {
+        const labels = Object.keys(utilData);
+        const values = Object.values(utilData);
+        new Chart(ctx2, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '利用率',
+                    data: values.map(v => v * 100),
+                    backgroundColor: values.map(v => v >= 0.5 ? '#00d97e' : '#f6c343'),
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { min: 0, max: 100, title: { display: true, text: '%' } }
+                }
+            }
+        });
+    }
+});
+</script>
+{% endif %}
+{% endblock %}

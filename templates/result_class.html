@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}班级视图 — 考场自动排座系统{% endblock %}
+{% block content %}
+<h1>📊 班级分布视图</h1>
+
+<div class="result-tabs">
+    <a href="{{ url_for('result_classroom') }}" class="tab">考场视图</a>
+    <a href="{{ url_for('result_student') }}" class="tab">考生视图</a>
+    <a href="{{ url_for('result_teacher') }}" class="tab">教师视图</a>
+    <a href="{{ url_for('result_class') }}" class="tab active">班级视图</a>
+</div>
+
+{% if not results %}
+<div class="alert alert-info">暂无排座结果。</div>
+{% else %}
+
+<!-- 班级选择 -->
+<div class="class-selector">
+    <label>选择班级：</label>
+    <select id="class-select" class="select-input">
+        <option value="">全部</option>
+        {% for class_id in class_colors.keys() %}
+        <option value="{{ class_id }}">{{ class_id }}</option>
+        {% endfor %}
+    </select>
+</div>
+
+<!-- 柱状图：各班在各考场的分布 -->
+<div class="chart-container">
+    <h3>📊 考场 — 班级分布柱状图</h3>
+    <canvas id="class-distribution-chart" width="800" height="400"></canvas>
+</div>
+
+<!-- 各班级在各考场的散布情况 -->
+{% for session_id, result in results.items() %}
+<div class="session-section">
+    <h2>📅 {{ result.session.subject.name }} — 各班座位散布</h2>
+    {% for cr in result.classrooms %}
+    <div class="classroom-card">
+        <h3>{{ cr.room_id }}</h3>
+        <table class="seat-grid class-highlight" data-classroom="{{ cr.room_id }}">
+            {% for r in range(1, cr.rows + 1) %}
+            <tr>
+                {% for c in range(1, cr.cols + 1) %}
+                    {% set is_blocked = (r, c) in cr.blocked %}
+                    {% set seat = cr.seats | selectattr("row", "equalto", r) | selectattr("col", "equalto", c) | first %}
+                    {% if is_blocked %}
+                    <td class="seat-blocked"></td>
+                    {% elif seat and seat.student_id %}
+                    {% set s = all_students.get(seat.student_id) if all_students else none %}
+                    {% set cid = s.class_id if s else '' %}
+                    <td class="seat-occupied seat-class-{{ cid | replace(' ', '-') }}"
+                        style="background-color: {{ class_colors.get(cid, '#ddd') }}"
+                        data-class="{{ cid }}">
+                        {{ s.student_id[-3:] if s else '?' }}
+                    </td>
+                    {% else %}
+                    <td class="seat-empty">—</td>
+                    {% endif %}
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% endfor %}
+</div>
+{% endfor %}
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 班级筛选
+document.getElementById('class-select').addEventListener('change', function() {
+    const selectedClass = this.value;
+    document.querySelectorAll('.seat-occupied').forEach(cell => {
+        if (!selectedClass || cell.dataset.class === selectedClass) {
+            cell.style.opacity = '1';
+        } else {
+            cell.style.opacity = '0.2';
+        }
+    });
+});
+
+// 柱状图
+document.addEventListener('DOMContentLoaded', function() {
+    const canvas = document.getElementById('class-distribution-chart');
+    if (!canvas) return;
+
+    const classrooms = [
+        {% for session_id, result in results.items() %}
+            {% for cr in result.classrooms %}
+            '{{ cr.room_id }}',
+            {% endfor %}
+        {% endfor %}
+    ];
+    const classIds = [
+        {% for class_id in class_colors.keys() %}
+        '{{ class_id }}',
+        {% endfor %}
+    ];
+
+    // 构建数据集
+    const datasets = [];
+    const colors = {{ class_colors | tojson }};
+
+    classIds.forEach(classId => {
+        const data = [];
+        {% for session_id, result in results.items() %}
+            {% for cr in result.classrooms %}
+            (function() {
+                let count = 0;
+                {% for seat in cr.seats %}
+                {% set s = all_students.get(seat.student_id) if all_students and seat.student_id else none %}
+                if ('{{ s.class_id if s else '' }}' === classId) count++;
+                {% endfor %}
+                data.push(count);
+            })();
+            {% endfor %}
+        {% endfor %}
+        datasets.push({
+            label: classId,
+            data: data,
+            backgroundColor: colors[classId] || '#ddd',
+        });
+    });
+
+    new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: classrooms,
+            datasets: datasets,
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: { stacked: true },
+                y: { stacked: true, title: { display: true, text: '人数' } }
+            },
+            plugins: {
+                title: { display: true, text: '各班在各考场分布' }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}考生视图 — 考场自动排座系统{% endblock %}
+{% block content %}
+<h1>👤 考生座位查询</h1>
+
+<div class="result-tabs">
+    <a href="{{ url_for('result_classroom') }}" class="tab">考场视图</a>
+    <a href="{{ url_for('result_student') }}" class="tab active">考生视图</a>
+    <a href="{{ url_for('result_teacher') }}" class="tab">教师视图</a>
+    <a href="{{ url_for('result_class') }}" class="tab">班级视图</a>
+</div>
+
+{% if not results %}
+<div class="alert alert-info">暂无排座结果。</div>
+{% else %}
+
+<div class="search-box">
+    <input type="text" id="student-search" placeholder="输入学号或姓名搜索..." class="search-input">
+</div>
+
+<div class="student-cards" id="student-cards">
+    {% for sid, sessions in student_sessions.items() %}
+    {% set s = all_students.get(sid) %}
+    {% if s %}
+    <div class="student-card" data-search="{{ s.student_id }} {{ s.name }} {{ s.class_id }}">
+        <div class="card-header">
+            <strong>{{ s.name }}</strong>
+            <span class="student-id">{{ s.student_id }}</span>
+            <span class="class-tag" style="background-color: {{ class_colors.get(s.class_id, '#ddd') }}">{{ s.class_id }}</span>
+            {% if s.has_cheating_record %}<span class="tag tag-warning">⚠作弊</span>{% endif %}
+            {% if s.has_penalty %}<span class="tag tag-danger">扣{{ s.penalty }}分</span>{% endif %}
+        </div>
+        <div class="card-body">
+            {% for sess_id, loc in sessions.items() %}
+            <div class="exam-row">
+                📝 <strong>{{ loc.subject_name }}</strong>
+                🕐 {{ loc.datetime }}
+                📍 {{ loc.room_id }}-{{ loc.row }}-{{ loc.col }}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('student-search').addEventListener('input', function() {
+    const query = this.value.toLowerCase();
+    document.querySelectorAll('.student-card').forEach(card => {
+        const text = card.dataset.search.toLowerCase();
+        card.style.display = text.includes(query) ? '' : 'none';
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}考场视图 — 考场自动排座系统{% endblock %}
+{% block content %}
+<h1>🏫 考场座位视图</h1>
+
+<div class="result-tabs">
+    <a href="{{ url_for('result_classroom') }}" class="tab active">考场视图</a>
+    <a href="{{ url_for('result_student') }}" class="tab">考生视图</a>
+    <a href="{{ url_for('result_teacher') }}" class="tab">教师视图</a>
+    <a href="{{ url_for('result_class') }}" class="tab">班级视图</a>
+</div>
+
+{% if not results %}
+<div class="alert alert-info">暂无排座结果，请先<a href="{{ url_for('config') }}">配置并运行</a>。</div>
+{% else %}
+
+{% for session_id, result in results.items() %}
+<div class="session-section">
+    <h2>📅 {{ result.session.subject.name }} ({{ result.session.datetime }})</h2>
+    <div class="session-meta">
+        算法: {{ result.metadata.algorithm }} |
+        迭代: {{ result.metadata.iterations }} |
+        耗时: {{ result.metadata.time_elapsed }}s
+    </div>
+
+    <div class="classrooms-grid">
+        {% for cr in result.classrooms %}
+        <div class="classroom-card">
+            <h3>{{ cr.room_id }}</h3>
+            <table class="seat-grid">
+                {% for r in range(1, cr.rows + 1) %}
+                <tr>
+                    {% for c in range(1, cr.cols + 1) %}
+                        {% set is_blocked = (r, c) in cr.blocked %}
+                        {% set seat = cr.seats | selectattr("row", "equalto", r) | selectattr("col", "equalto", c) | first %}
+                        {% if is_blocked %}
+                        <td class="seat-blocked"></td>
+                        {% elif seat and seat.student_id %}
+                        {% set sid = seat.student_id %}
+                        {% set s = all_students.get(sid) if all_students else none %}
+                        <td class="seat-occupied"
+                            style="background-color: {{ class_colors.get(s.class_id if s else '', '#ddd') }}"
+                            title="{% if s %}{{ s.student_id }} {{ s.name }} {{ s.class_id }}{% if s.cheating_record %} ⚠作弊{% endif %}{% if s.penalty > 0 %} 扣{{ s.penalty }}分{% endif %}{% endif %}">
+                            {% if s %}{{ s.student_id[-3:] }}{% endif %}
+                        </td>
+                        {% else %}
+                        <td class="seat-empty">—</td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </table>
+            <div class="classroom-stats">
+                已用: {{ cr.occupied_count }} / {{ cr.available_count }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+
+<!-- 图例 -->
+<div class="legend">
+    <h3>班级颜色图例</h3>
+    <div class="legend-items">
+        {% for class_id, color in class_colors.items() %}
+        <div class="legend-item">
+            <span class="legend-color" style="background-color: {{ color }}"></span>
+            {{ class_id }}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}

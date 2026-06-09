@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}配置约束 — 考场自动排座系统{% endblock %}
+{% block content %}
+<h1>⚙️ 配置排座约束与参数</h1>
+<p class="subtitle">选择约束条件、算法、调整参数，配置考试场次。</p>
+
+{% if not subjects %}
+<div class="alert alert-warning">
+    ⚠️ 请先<a href="{{ url_for('upload') }}">上传数据</a>。
+</div>
+{% else %}
+
+<form method="POST" class="config-form">
+    <!-- 考试场次配置 -->
+    <h2>📅 考试场次配置</h2>
+    <div id="sessions-container">
+        <div class="session-row session-header">
+            <div>选择</div>
+            <div>科目</div>
+            <div>考试时间</div>
+            <div>备注</div>
+        </div>
+        {% for subj in subjects %}
+        <div class="session-row">
+            <div><input type="checkbox" name="session_subject" value="{{ subj.code }}" checked></div>
+            <div><strong>{{ subj.name }}</strong> ({{ subj.code }})</div>
+            <div><input type="text" name="session_datetime_{{ subj.code }}" value="2025-01-20 08:00-10:00" class="input-datetime"></div>
+            <div>{{ subj.type }} | {{ subj.class_id }} | {{ subj.duration_minutes }}分钟</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- 约束配置 -->
+    <h2>🔒 班级隔离约束</h2>
+    <div class="constraint-grid">
+        <label class="toggle">
+            <input type="checkbox" name="isolate_4adj" checked>
+            <span>四邻无同班</span>
+            <small>上下左右相邻座位不能是同班同学</small>
+        </label>
+        <label class="toggle">
+            <input type="checkbox" name="isolate_8adj">
+            <span>八邻无同班</span>
+            <small>含对角线的相邻座位不能是同班同学</small>
+        </label>
+        <label class="toggle">
+            <input type="checkbox" name="isolate_same_row">
+            <span>同排无同班</span>
+            <small>同一排不能出现 2 个以上同班同学</small>
+        </label>
+        <label class="toggle">
+            <input type="checkbox" name="isolate_same_col">
+            <span>同列无同班</span>
+            <small>同一列不能出现 2 个以上同班同学</small>
+        </label>
+    </div>
+
+    <h2>🏫 考场管理约束</h2>
+    <div class="constraint-grid">
+        <label class="toggle">
+            <input type="checkbox" name="room_capacity" checked>
+            <span>考场容量上限</span>
+            <small>每个考场人数不超过可用座位数</small>
+        </label>
+        <label class="toggle">
+            <input type="checkbox" name="balance_rooms">
+            <span>考场人数均衡</span>
+            <small>各考场人数尽量均衡（软约束）</small>
+        </label>
+    </div>
+
+    <h2>👤 学生分配</h2>
+    <div class="constraint-grid">
+        <label class="toggle">
+            <input type="checkbox" name="cheater_front">
+            <span>作弊考生前排</span>
+            <small>有作弊记录的学生安排在前 2 排</small>
+        </label>
+        <label class="toggle">
+            <input type="checkbox" name="penalty_front">
+            <span>扣分考生前排</span>
+            <small>有扣分记录的学生安排在前 2 排</small>
+        </label>
+    </div>
+
+    <h2>👨‍🏫 教师监考</h2>
+    <div class="constraint-grid">
+        <label class="toggle">
+            <input type="checkbox" name="teacher_one_room" checked>
+            <span>一人一考场</span>
+            <small>每位监考只负责一个考场</small>
+        </label>
+        <label class="toggle">
+            <input type="checkbox" name="teacher_avoid_class">
+            <span>回避任教班级</span>
+            <small>监考不监考自己任教的班级</small>
+        </label>
+    </div>
+
+    <!-- 算法选择 -->
+    <h2>🧮 算法选择</h2>
+    <div class="algo-select">
+        <label class="algo-option">
+            <input type="radio" name="algorithm" value="SA" checked>
+            <span>🔥 模拟退火 (SA)</span>
+            <small>推荐 — 收敛快，效果好</small>
+        </label>
+        <label class="algo-option">
+            <input type="radio" name="algorithm" value="ACO">
+            <span>🐜 蚁群算法 (ACO)</span>
+            <small>可选对比</small>
+        </label>
+    </div>
+
+    <!-- SA 参数 -->
+    <h2>🔧 SA 参数</h2>
+    <div class="param-grid">
+        <div class="param">
+            <label>初始温度 T_start</label>
+            <input type="number" name="T_start" value="100.0" step="1" min="1">
+        </div>
+        <div class="param">
+            <label>终止温度 T_end</label>
+            <input type="number" name="T_end" value="0.01" step="0.01" min="0.001">
+        </div>
+        <div class="param">
+            <label>冷却速率</label>
+            <input type="number" name="cooling_rate" value="0.9995" step="0.0001" min="0.9" max="1.0">
+        </div>
+        <div class="param">
+            <label>每温迭代次数</label>
+            <input type="number" name="iterations_per_temp" value="100" step="10" min="10">
+        </div>
+        <div class="param">
+            <label>重启次数</label>
+            <input type="number" name="restart_count" value="3" step="1" min="1" max="10">
+        </div>
+    </div>
+
+    <!-- ACO 参数 -->
+    <h2>🔧 ACO 参数</h2>
+    <div class="param-grid">
+        <div class="param">
+            <label>蚂蚁数 n_ants</label>
+            <input type="number" name="n_ants" value="20" step="1" min="1">
+        </div>
+        <div class="param">
+            <label>迭代轮数</label>
+            <input type="number" name="n_iterations" value="200" step="10" min="10">
+        </div>
+        <div class="param">
+            <label>蒸发率 ρ</label>
+            <input type="number" name="evaporation_rate" value="0.1" step="0.01" min="0.01" max="1.0">
+        </div>
+        <div class="param">
+            <label>α (信息素权重)</label>
+            <input type="number" name="alpha" value="1.0" step="0.1" min="0">
+        </div>
+        <div class="param">
+            <label>β (启发式权重)</label>
+            <input type="number" name="beta" value="2.0" step="0.1" min="0">
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary btn-lg">🚀 开始排座</button>
+    </div>
+</form>
+
+{% endif %}
+{% endblock %}

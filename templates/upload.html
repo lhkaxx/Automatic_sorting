@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% block title %}上传数据 — 考场自动排座系统{% endblock %}
+{% block content %}
+<h1>📤 上传数据文件</h1>
+<p class="subtitle">上传 5 个 CSV 文件（学生/班级/考场/科目/教师），或使用网格编辑器逐个添加考场。</p>
+
+<form method="POST" enctype="multipart/form-data" class="upload-form">
+    <h2>CSV 文件上传</h2>
+    <div class="upload-grid">
+        <div class="upload-item">
+            <label>📋 学生数据 (students.csv) <span class="required">*</span></label>
+            <input type="file" name="students_csv" accept=".csv">
+            {% if student_count %}<span class="badge">{{ student_count }} 条</span>{% endif %}
+        </div>
+        <div class="upload-item">
+            <label>🏫 班级数据 (classes.csv) <span class="required">*</span></label>
+            <input type="file" name="classes_csv" accept=".csv">
+            {% if class_count %}<span class="badge">{{ class_count }} 条</span>{% endif %}
+        </div>
+        <div class="upload-item">
+            <label>🏢 考场数据 (classrooms.csv) <span class="required">*</span></label>
+            <input type="file" name="classrooms_csv" accept=".csv">
+            {% if classroom_count %}<span class="badge">{{ classroom_count }} 条</span>{% endif %}
+        </div>
+        <div class="upload-item">
+            <label>📚 科目数据 (subjects.csv) <span class="required">*</span></label>
+            <input type="file" name="subjects_csv" accept=".csv">
+            {% if subject_count %}<span class="badge">{{ subject_count }} 条</span>{% endif %}
+        </div>
+        <div class="upload-item">
+            <label>👨‍🏫 教师数据 (teachers.csv)</label>
+            <input type="file" name="teachers_csv" accept=".csv">
+            {% if teacher_count %}<span class="badge">{{ teacher_count }} 条</span>{% endif %}
+        </div>
+    </div>
+
+    <h2>🏢 网格编辑器 — 手动添加/微调考场</h2>
+    <p class="hint">逐个添加考场，点击格子切换可用/阻塞状态。也可直接粘贴 seat_layout 字符串批量导入。</p>
+
+    <div class="grid-editor" id="grid-editor">
+        <div class="editor-controls">
+            <div class="control-group">
+                <label>教室编号</label>
+                <input type="text" id="edit-room-id" placeholder="如 C201">
+            </div>
+            <div class="control-group">
+                <label>楼号</label>
+                <input type="text" id="edit-building" placeholder="如 C">
+            </div>
+            <div class="control-group">
+                <label>楼层</label>
+                <input type="number" id="edit-floor" value="1" min="1">
+            </div>
+            <div class="control-group">
+                <label>容量</label>
+                <input type="number" id="edit-capacity" value="48" min="1">
+            </div>
+            <div class="control-group">
+                <label>行数</label>
+                <input type="number" id="edit-rows" value="8" min="1" max="20">
+            </div>
+            <div class="control-group">
+                <label>列数</label>
+                <input type="number" id="edit-cols" value="6" min="1" max="20">
+            </div>
+            <div class="control-group">
+                <button type="button" id="btn-render-grid" class="btn btn-secondary">🔄 渲染网格</button>
+            </div>
+        </div>
+
+        <div class="editor-grid-container">
+            <div id="edit-grid" class="seat-grid-editor"></div>
+            <div class="editor-info">
+                <p>可用座位: <strong id="avail-count">48</strong></p>
+                <p>阻塞格: <strong id="blocked-count">0</strong></p>
+                <p>seat_layout: <code id="layout-str">8×6</code></p>
+                <button type="button" id="btn-add-room" class="btn btn-primary">➕ 添加考场</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="added-rooms" id="added-rooms">
+        <h3>已添加的考场</h3>
+        <div id="room-list" class="room-list">
+            {% for room in manual_rooms %}
+            <div class="room-card">
+                <strong>{{ room.room_id }}</strong> ({{ room.building }}楼 {{ room.floor }}F)
+                — {{ room.rows }}×{{ room.cols }}
+                — 容量 {{ room.capacity }}
+                — <code>{{ room.seat_layout }}</code>
+                <button type="button" class="btn-remove" data-room="{{ room.room_id }}">✕</button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- 隐藏的考场列表输入 -->
+    <input type="hidden" name="manual_classrooms" id="manual-classrooms-input" value='{{ manual_classrooms_json | safe }}'>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary btn-lg">📤 上传并解析</button>
+    </div>
+</form>
+
+<div class="data-preview">
+    <h2>📋 当前数据预览</h2>
+    {% if student_count %}
+    <p>✅ 学生: {{ student_count }} 人 | 班级: {{ class_count }} | 考场: {{ classroom_count }} | 科目: {{ subject_count }} | 教师: {{ teacher_count }}</p>
+    {% else %}
+    <p class="muted">尚未上传数据</p>
+    {% endif %}
+</div>
+
+<div class="nav-actions">
+    <a href="{{ url_for('config') }}" class="btn btn-success">下一步：⚙️ 配置约束 →</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 网格编辑器逻辑
+let editRows = 8;
+let editCols = 6;
+let blockedCells = new Set();
+
+document.getElementById('btn-render-grid').addEventListener('click', renderGrid);
+
+document.getElementById('edit-rows').addEventListener('change', function() {
+    editRows = parseInt(this.value) || 8;
+    renderGrid();
+});
+
+document.getElementById('edit-cols').addEventListener('change', function() {
+    editCols = parseInt(this.value) || 6;
+    renderGrid();
+});
+
+function renderGrid() {
+    editRows = parseInt(document.getElementById('edit-rows').value) || 8;
+    editCols = parseInt(document.getElementById('edit-cols').value) || 6;
+    blockedCells.clear();
+
+    const grid = document.getElementById('edit-grid');
+    grid.style.gridTemplateColumns = `repeat(${editCols}, 40px)`;
+    grid.innerHTML = '';
+
+    for (let r = 1; r <= editRows; r++) {
+        for (let c = 1; c <= editCols; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'grid-cell available';
+            cell.dataset.row = r;
+            cell.dataset.col = c;
+            cell.textContent = `${r},${c}`;
+            cell.title = `(${r}, ${c}) — 点击切换`;
+            cell.addEventListener('click', () => toggleCell(cell, r, c));
+            grid.appendChild(cell);
+        }
+    }
+    updateStats();
+}
+
+function toggleCell(cell, r, c) {
+    const key = `${r},${c}`;
+    if (blockedCells.has(key)) {
+        blockedCells.delete(key);
+        cell.className = 'grid-cell available';
+    } else {
+        blockedCells.add(key);
+        cell.className = 'grid-cell blocked';
+    }
+    updateStats();
+}
+
+function updateStats() {
+    const total = editRows * editCols;
+    const blocked = blockedCells.size;
+    document.getElementById('avail-count').textContent = total - blocked;
+    document.getElementById('blocked-count').textContent = blocked;
+
+    // 生成 seat_layout 字符串
+    let layout = `${editRows}×${editCols}`;
+    if (blocked > 0) {
+        const coords = Array.from(blockedCells).sort().map(k => `(${k})`).join(';');
+        layout += '!' + coords;
+    }
+    document.getElementById('layout-str').textContent = layout;
+}
+
+document.getElementById('btn-add-room').addEventListener('click', function() {
+    const roomId = document.getElementById('edit-room-id').value.trim();
+    const building = document.getElementById('edit-building').value.trim();
+    const floor = document.getElementById('edit-floor').value;
+    const capacity = document.getElementById('edit-capacity').value;
+    const layout = document.getElementById('layout-str').textContent;
+
+    if (!roomId || !building) {
+        alert('请填写教室编号和楼号');
+        return;
+    }
+
+    // 添加到隐藏字段
+    let rooms = [];
+    try {
+        const current = document.getElementById('manual-classrooms-input').value;
+        if (current) rooms = JSON.parse(current);
+    } catch(e) {}
+
+    rooms.push({
+        room_id: roomId,
+        building: building,
+        floor: parseInt(floor),
+        capacity: parseInt(capacity),
+        rows: editRows,
+        cols: editCols,
+        seat_layout: layout
+    });
+
+    document.getElementById('manual-classrooms-input').value = JSON.stringify(rooms);
+
+    // 更新列表显示
+    const list = document.getElementById('room-list');
+    const card = document.createElement('div');
+    card.className = 'room-card';
+    card.innerHTML = `<strong>${roomId}</strong> (${building}楼 ${floor}F) — ${editRows}×${editCols} — 容量 ${capacity} — <code>${layout}</code> <button type="button" class="btn-remove" data-room="${roomId}">✕</button>`;
+    list.appendChild(card);
+
+    // 清除输入
+    document.getElementById('edit-room-id').value = '';
+    blockedCells.clear();
+    renderGrid();
+});
+
+document.getElementById('room-list').addEventListener('click', function(e) {
+    if (e.target.classList.contains('btn-remove')) {
+        const roomId = e.target.dataset.room;
+        e.target.parentElement.remove();
+        // 更新隐藏字段
+        let rooms = [];
+        try {
+            const current = document.getElementById('manual-classrooms-input').value;
+            if (current) rooms = JSON.parse(current);
+        } catch(e) {}
+        rooms = rooms.filter(r => r.room_id !== roomId);
+        document.getElementById('manual-classrooms-input').value = JSON.stringify(rooms);
+    }
+});
+
+// 初始渲染
+renderGrid();
+</script>
+{% endblock %}

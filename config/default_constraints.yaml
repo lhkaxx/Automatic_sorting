@@ -1,0 +1,40 @@
+# 考场自动排座系统 — 默认约束配置
+# 对应 ConstraintConfig 数据类的默认值
+
+class_isolation:
+  isolate_same_class_4adj: true
+  isolate_same_class_8adj: false
+  isolate_same_class_same_row: false
+  isolate_same_class_same_col: false
+  min_gap_same_class: 0
+
+room_management:
+  room_capacity_enabled: true
+  min_utilization: 0.0
+  balance_rooms: false
+
+student_assignment:
+  cheater_near_front: false
+  penalized_near_front: false
+  sort_by_student_id: false
+
+teacher_assignment:
+  teacher_one_room: true
+  teacher_avoid_own_class: false
+  teacher_balance: false
+
+# 模拟退火参数
+sa_params:
+  T_start: 100.0
+  T_end: 0.01
+  cooling_rate: 0.9995
+  iterations_per_temp: 100
+  restart_count: 3
+
+# 蚁群算法参数
+aco_params:
+  n_ants: 20
+  n_iterations: 200
+  evaporation_rate: 0.1
+  alpha: 1.0
+  beta: 2.0
